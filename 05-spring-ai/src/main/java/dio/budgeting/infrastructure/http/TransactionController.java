@@ -3,7 +3,7 @@ package dio.budgeting.infrastructure.http;
 import dio.budgeting.application.ListTransactionsByCategoryUseCase;
 import dio.budgeting.application.PersistTransactionUseCase;
 import dio.budgeting.domain.Category;
-import dio.budgeting.infrastructure.ai.TransactionTools;
+import dio.budgeting.infrastructure.ai.GuardedTools;
 import dio.budgeting.infrastructure.http.request.TransactionRequest;
 import dio.budgeting.infrastructure.http.response.TransactionResponse;
 import org.springframework.ai.audio.transcription.TranscriptionModel;
@@ -29,6 +29,7 @@ public class TransactionController {
     private final TranscriptionModel transcriptionModel;
     private final ChatClient chatClient;
     private final TextToSpeechModel textToSpeechModel;
+    private final GuardedTools guardedTools;
 
     public TransactionController(PersistTransactionUseCase persistTransactionUseCase,
                                  ListTransactionsByCategoryUseCase listTransactionsByCategoryUseCase,
@@ -36,15 +37,15 @@ public class TransactionController {
                                  @Value("classpath:prompts/system-message.st") Resource systemPrompt,
                                  ChatClient.Builder chatClientBuilder,
                                  TextToSpeechModel textToSpeechModel,
-                                 TransactionTools transactionTools) throws IOException {
+                                 GuardedTools guardedTools) throws IOException {
         this.persistTransactionUseCase = persistTransactionUseCase;
         this.listTransactionsByCategoryUseCase = listTransactionsByCategoryUseCase;
         this.transcriptionModel = transcriptionModel;
         this.chatClient = chatClientBuilder
                 .defaultSystem(systemPrompt.getContentAsString(Charset.defaultCharset()))
-                .defaultTools(transactionTools)
                 .build();
         this.textToSpeechModel = textToSpeechModel;
+        this.guardedTools = guardedTools;
     }
 
     @PostMapping
@@ -62,7 +63,11 @@ public class TransactionController {
     @PostMapping(value = "/ai", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = "audio/mp3")
     ResponseEntity<Resource> transcribe(@RequestParam("file") MultipartFile file) {
         var userMessage = transcriptionModel.transcribe(file.getResource());
-        var result = chatClient.prompt().user(userMessage).call().content();
+        var result = chatClient.prompt()
+                .user(userMessage)
+                .toolCallbacks(guardedTools.forNewAnswer())
+                .call()
+                .content();
 
         byte[] audio = textToSpeechModel.call(result);
         var resource = new ByteArrayResource(audio);
