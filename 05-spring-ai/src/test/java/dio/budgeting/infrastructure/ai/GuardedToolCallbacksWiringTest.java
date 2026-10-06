@@ -1,5 +1,7 @@
 package dio.budgeting.infrastructure.ai;
 
+import com.marcusrdrigues.noxguard.springai.AnswerTools;
+import com.marcusrdrigues.noxguard.springai.GuardedToolCallbacks;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -11,15 +13,18 @@ import static dio.budgeting.infrastructure.ai.TransactionTools.PERSIST_TRANSACTI
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Spec 001, cases G1 to G5: the decorator runs the real tool only when the policy allows it. */
-class GuardedToolCallbackTest {
+/**
+ * Spec 002, cases G1 to G5: this project's policy, through noxguard-spring-ai, runs the real tool only when the
+ * policy allows it. The adapter itself is tested in noxguard; this checks the wiring of this project.
+ */
+class GuardedToolCallbacksWiringTest {
     private static final String VALID = "{\"description\":\"Farmácia\",\"amountInCents\":5000,\"category\":\"PHARMA\"}";
     private static final String NEGATIVE = "{\"description\":\"Mercado\",\"amountInCents\":-2000,\"category\":\"GROCERIES\"}";
     private static final String TOOL_RESULT = "{\"ok\":true}";
 
     private final FakeTool persist = new FakeTool(PERSIST_TRANSACTION);
     private final FakeTool list = new FakeTool(LIST_TRANSACTIONS_BY_CATEGORY);
-    private final GuardedTools tools = new GuardedTools(GuardrailConfiguration.policy(), List.of(persist, list));
+    private final GuardedToolCallbacks tools = GuardrailConfiguration.guarded(GuardrailConfiguration.policy(), List.of(persist, list));
 
     @Test
     void runsTheToolWhenThePolicyAllows() {
@@ -42,7 +47,8 @@ class GuardedToolCallbackTest {
         ToolCallback guarded = named(tools.forNewAnswer(), PERSIST_TRANSACTION);
 
         for (int i = 0; i < GuardrailConfiguration.MAX_CALLS_PER_ANSWER; i++) {
-            assertThat(guarded.call("not json")).isEqualTo(GuardedToolCallback.INVALID_JSON);
+            assertThat(guarded.call("not json")).isEqualTo(
+                    "Error: the arguments are not a valid JSON object; send an object with: description, amountInCents, category.");
         }
 
         assertThat(guarded.call(VALID)).contains("tool limit reached");
@@ -67,13 +73,13 @@ class GuardedToolCallbackTest {
     void refusesToStartWithAToolThatThePolicyDoesNotDeclare() {
         var unguarded = new FakeTool("delete-all-transactions");
 
-        assertThatThrownBy(() -> new GuardedTools(GuardrailConfiguration.policy(), List.of(persist, unguarded)))
+        assertThatThrownBy(() -> GuardrailConfiguration.guarded(GuardrailConfiguration.policy(), List.of(persist, unguarded)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("delete-all-transactions");
     }
 
-    private static ToolCallback named(List<ToolCallback> tools, String name) {
-        return tools.stream()
+    private static ToolCallback named(AnswerTools answer, String name) {
+        return answer.callbacks().stream()
                 .filter(tool -> tool.getToolDefinition().name().equals(name))
                 .findFirst()
                 .orElseThrow();

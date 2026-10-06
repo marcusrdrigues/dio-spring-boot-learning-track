@@ -1,5 +1,6 @@
 package dio.budgeting.infrastructure.ai;
 
+import com.marcusrdrigues.noxguard.springai.GuardedToolCallbacks;
 import org.springframework.ai.audio.transcription.TranscriptionModel;
 import org.springframework.ai.audio.tts.TextToSpeechModel;
 import org.springframework.ai.chat.client.ChatClient;
@@ -13,19 +14,19 @@ import java.nio.charset.StandardCharsets;
 /**
  * The assistant's flow: speech to text, the model with the guarded tools, and text to speech.
  *
- * <p>Every answer gets its own tools from {@link GuardedTools#forNewAnswer()}, so the limits of the
- * {@code ToolPolicy} count per answer.
+ * <p>Every answer gets its own tools from {@link GuardedToolCallbacks#forNewAnswer()}, so the limits of
+ * the {@code ToolPolicy} count per answer.
  */
 @Component
 public class BudgetAssistant {
     private final ChatClient chatClient;
-    private final GuardedTools guardedTools;
+    private final GuardedToolCallbacks guardedTools;
     private final TranscriptionModel transcriptionModel;
     private final TextToSpeechModel textToSpeechModel;
 
     public BudgetAssistant(ChatClient.Builder chatClientBuilder,
                            @Value("classpath:prompts/system-message.st") Resource systemPrompt,
-                           GuardedTools guardedTools,
+                           GuardedToolCallbacks guardedTools,
                            TranscriptionModel transcriptionModel,
                            TextToSpeechModel textToSpeechModel) throws IOException {
         this.chatClient = chatClientBuilder
@@ -40,7 +41,7 @@ public class BudgetAssistant {
     public String answer(String message) {
         return chatClient.prompt()
                 .user(message)
-                .toolCallbacks(guardedTools.forNewAnswer())
+                .toolCallbacks(guardedTools.forNewAnswer().callbacks())
                 .call()
                 .content();
     }

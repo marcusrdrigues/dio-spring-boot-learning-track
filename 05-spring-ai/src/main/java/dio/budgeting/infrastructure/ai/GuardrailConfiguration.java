@@ -2,9 +2,11 @@ package dio.budgeting.infrastructure.ai;
 
 import com.marcusrdrigues.noxguard.agent.ArgRule;
 import com.marcusrdrigues.noxguard.agent.ToolPolicy;
+import com.marcusrdrigues.noxguard.springai.GuardedToolCallbacks;
 import dio.budgeting.domain.Category;
 import dio.budgeting.domain.Transaction;
 import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,6 +21,7 @@ import java.util.Optional;
  *
  * <p>The domain still validates every transaction; this policy stops a bad call before any tool runs,
  * and also catches what the domain cannot see: unknown tools, extra arguments and too many calls.
+ * {@code noxguard-spring-ai} puts every Spring AI tool under it (spec 002).
  */
 @Configuration
 public class GuardrailConfiguration {
@@ -32,8 +35,19 @@ public class GuardrailConfiguration {
     }
 
     @Bean
-    GuardedTools guardedTools(ToolPolicy toolPolicy, TransactionTools transactionTools) {
-        return new GuardedTools(toolPolicy, List.of(ToolCallbacks.from(transactionTools)));
+    GuardedToolCallbacks guardedToolCallbacks(ToolPolicy toolPolicy, TransactionTools transactionTools) {
+        return guarded(toolPolicy, List.of(ToolCallbacks.from(transactionTools)));
+    }
+
+    /**
+     * The tools under the policy, with the decisions logged. No tool here needs the person's confirmation, so
+     * there is no {@code onConfirm}; a tool exposed without a rule in the policy stops the app at startup.
+     */
+    static GuardedToolCallbacks guarded(ToolPolicy policy, List<ToolCallback> tools) {
+        return GuardedToolCallbacks.builder(policy)
+                .tools(tools)
+                .listener(new ToolDecisionLog())
+                .build();
     }
 
     /** The policy itself, without Spring, so it can be tested on its own. */
