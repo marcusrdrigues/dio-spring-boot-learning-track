@@ -1,0 +1,32 @@
+name: 05-spring-ai
+
+# Runs the tests of the voice budgeting assistant: no OpenAI key and no Docker needed
+# (the *IT tests that call OpenAI run only with OPENAI_API_KEY set).
+on:
+  push:
+    branches: [main]
+    paths: ["05-spring-ai/**", ".github/workflows/05-spring-ai.yml"]
+  pull_request:
+    paths: ["05-spring-ai/**", ".github/workflows/05-spring-ai.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 05-spring-ai
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Test
+        run: |
+          chmod +x gradlew
+          ./gradlew test --no-daemon 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+      - name: Report the failures as an annotation
+        if: failure()
+        run: |
+          errors=$(grep -E 'error:|FAILED|Exception|expected|but was' build.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          echo "::error title=05-spring-ai::${errors}"
