@@ -2,7 +2,9 @@
 
 API de orçamento que entende comandos de voz ("gastei 50 reais na farmácia"), registra e consulta gastos e responde em áudio. É o projeto final da trilha de Spring Boot da DIO, evoluído com **guardrails determinísticos**: antes de qualquer ferramenta rodar, o código confere o que o modelo pediu.
 
-Os guardrails usam o [noxguard](https://github.com/marcusrdrigues/noxguard), uma biblioteca open source de guardrails para chats e agentes com LLM em Java.
+Os guardrails usam o [noxguard](https://github.com/marcusrdrigues/noxguard), uma biblioteca open source de guardrails para chats e agentes com LLM em Java. Este projeto é o exemplo real do módulo `noxguard-spring-ai`.
+
+> **Versão entregue para o certificado da DIO:** a tag [`entrega-dio`](https://github.com/marcusrdrigues/dio-spring-boot-learning-track/tree/entrega-dio/05-spring-ai) guarda o projeto exatamente como foi entregue. Depois da entrega, o decorator próprio virou o módulo `noxguard-spring-ai` e o projeto passou a usá-lo ([spec 002](docs/specs/002-noxguard-spring-ai.md)).
 
 ## O que o projeto faz
 
@@ -46,7 +48,7 @@ O `ToolPolicy` do noxguard está para as ferramentas de um agente como o Spring 
 ```text
 texto ─► ChatClient ─► o modelo pede uma ferramenta
                           │
-               GuardedToolCallback  (camada 2: noxguard)
+               noxguard-spring-ai  (camada 2)
                ToolSession.decide(call)
                  ├─ Deny ─► "Error: ..." volta para o modelo; nada roda
                  └─ Run  ─► TransactionTools ─► caso de uso
@@ -56,8 +58,8 @@ texto ─► ChatClient ─► o modelo pede uma ferramenta
 
 Como a integração foi feita:
 
-- **`GuardedToolCallback`** é um decorator do `ToolCallback` do Spring AI. Ele transforma os argumentos do modelo em um mapa, pergunta à `ToolSession` e só chama a ferramenta real se a decisão for `Run`.
-- **Uma sessão por resposta:** o `GuardedTools` cria uma `ToolSession` nova a cada requisição, então os limites valem por resposta.
+- **`GuardedToolCallbacks`**, do módulo `noxguard-spring-ai`, embrulha cada `ToolCallback` do Spring AI. Ele transforma os argumentos do modelo em um mapa, pergunta à `ToolSession` e só chama a ferramenta real se a decisão for `Run`. Argumentos que não são um objeto JSON são negados e contam no limite.
+- **Uma sessão por resposta:** o `BudgetAssistant` chama `forNewAnswer()` a cada requisição, então os limites valem por resposta.
 - **A mensagem de recusa nunca repete o que o modelo enviou.** Um valor rejeitado pode ser exatamente o que uma injeção de prompt queria devolver à conversa.
 - **Nada fica sem regra por esquecimento:** se uma ferramenta for exposta ao modelo sem estar declarada na política, a aplicação não sobe.
 - **Logs sem texto livre:** só o nome da ferramenta, a decisão e a categoria vão para o log; a descrição do gasto, nunca.
@@ -74,8 +76,8 @@ A especificação completa, com as decisões e as alternativas descartadas, est�
 ## Tecnologias
 
 - Java 25 e Spring Boot 4
-- Spring AI 2.0 com OpenAI: `gpt-4o-mini` (chat e tool calling), `whisper-1` (transcrição) e `gpt-4o-mini-tts` (voz)
-- [noxguard-core 0.2.0](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-core) (`ToolPolicy`)
+- Spring AI 2.0.1 com OpenAI: `gpt-4o-mini` (chat e tool calling), `whisper-1` (transcrição) e `gpt-4o-mini-tts` (voz)
+- [noxguard-spring-ai 0.4.0](https://central.sonatype.com/artifact/com.marcusrdrigues/noxguard-spring-ai) (`ToolPolicy` e `GuardedToolCallbacks`)
 - Spring Data JPA com MySQL, via Docker Compose
 - JUnit 5 e AssertJ
 - Gradle e Lombok
@@ -113,7 +115,8 @@ Rodam sem chave e sem Docker:
 | `TransactionTest` | as regras do domínio: descrição, valor, teto, categoria e mensagens que não repetem o valor recebido |
 | `TransactionOutputTest` | a conversão de centavos para reais |
 | `BudgetToolPolicyTest` | cada decisão da política: chamada válida, valor inválido, categoria inexistente, argumento extra, ferramenta desconhecida, limites e injeção |
-| `GuardedToolCallbackTest` | o decorator: a ferramenta real só roda com `Run`, JSON inválido conta no limite, cada resposta tem a sua sessão e a aplicação não sobe com ferramenta sem regra |
+| `GuardedToolCallbacksWiringTest` | a ligação com o noxguard: a ferramenta real só roda com `Run`, JSON inválido conta no limite, cada resposta tem a sua sessão e a aplicação não sobe com ferramenta sem regra |
+| `ToolDecisionLogTest` | o log das decisões: tem a categoria e o motivo, nunca a descrição nem o valor recusado |
 
 Os testes `*IT` e o `BudgetingApplicationTests` chamam a OpenAI de verdade e só rodam com `OPENAI_API_KEY` definida.
 
@@ -165,9 +168,11 @@ WARN  GuardedToolCallback : Tool call denied: tool=persist-transaction reason=LI
 WARN  GuardedToolCallback : Tool call denied: tool=persist-transaction reason=LIMIT argument=-
 ```
 
+Esse log é da versão entregue. Hoje as mesmas linhas saem com o logger `ToolDecisionLog`.
+
 A 4ª chamada bateu no limite da própria ferramenta (3 gravações por resposta) e a 5ª, no limite total da resposta (4 chamadas, contando as negadas). Nenhuma das duas chegou ao banco.
 
-**O que o roteiro mostra:** o modelo recusa sozinho os casos óbvios, mas recusar na maioria das vezes não é garantia. Uma injeção mais bem feita, um modelo mais fraco ou uma transcrição estranha podem fazê-lo chamar a ferramenta com dados ruins, e aí quem decide é o código. Os testes automáticos (`BudgetToolPolicyTest` e `GuardedToolCallbackTest`) provam cada uma dessas decisões sem depender do modelo.
+**O que o roteiro mostra:** o modelo recusa sozinho os casos óbvios, mas recusar na maioria das vezes não é garantia. Uma injeção mais bem feita, um modelo mais fraco ou uma transcrição estranha podem fazê-lo chamar a ferramenta com dados ruins, e aí quem decide é o código. Os testes automáticos (`BudgetToolPolicyTest` e `GuardedToolCallbacksWiringTest`) provam cada uma dessas decisões sem depender do modelo.
 
 O texto exato das respostas varia de uma execução para outra, porque vem do modelo. O que não varia é o que os guardrails deixam gravar.
 
@@ -191,14 +196,14 @@ src/main/java/dio/budgeting/
 ├── domain/              Transaction (com as regras), categorias e contrato do repositório
 ├── application/         casos de uso, sem dependência de framework de IA
 └── infrastructure/
-    ├── ai/              ferramentas, política do noxguard, decorator e o fluxo do assistente
+    ├── ai/              ferramentas, política do noxguard, log das decisões e o fluxo do assistente
     ├── http/            controller, corpo das requisições e tratamento de erros
     └── persistence/     adaptador JPA
 ```
 
 ## Limites e próximos passos
 
-- A política confere **formato, não intenção**. Nos testes, "gastei menos 20 reais no mercado" virou um gasto de R$ 20,00: o valor é válido, então nenhuma camada tinha o que barrar. Do mesmo jeito, "50 reais" gravado como R$ 5.000 passaria, porque está abaixo do teto. Quem resolve isso é a **confirmação antes de salvar** (`Confirm` e `ProposalGate` do noxguard), o próximo passo.
+- A política confere **formato, não intenção**. Nos testes, "gastei menos 20 reais no mercado" virou um gasto de R$ 20,00: o valor é válido, então nenhuma camada tinha o que barrar. Do mesmo jeito, "50 reais" gravado como R$ 5.000 passaria, porque está abaixo do teto. Quem resolve isso é a **confirmação antes de salvar**, o próximo passo: com o `noxguard-spring-ai`, é declarar a ferramenta com `confirm()` e usar `ConfirmMode.HOLD`.
 - **O modelo pode afirmar uma ação que não aconteceu.** Com uma versão anterior do prompt, pedi "registre 10 gastos de 1 real no mercado" e o assistente respondeu que o limite tinha sido atingido e que ia registrar 5. Não registrou nenhum. A verdade está no banco e no log do guardrail, não na resposta do modelo. O prompt agora manda só confirmar o que a ferramenta confirmou, mas isso diminui o erro; não impede.
 - Um erro de transcrição ("15" no lugar de "50") passa pelas duas camadas.
 - **Injeção indireta:** uma descrição gravada com texto do tipo "ignore as instruções" volta para o modelo quando ele lista as transações. O próximo passo é delimitar os resultados das ferramentas com o `DataEnvelope` do noxguard.
@@ -211,7 +216,7 @@ src/main/java/dio/budgeting/
 
 **Validar no código, não no prompt.** Na primeira versão do prompt, o próprio modelo "validava" os dados e pedia mais informações, e o guardrail nem chegava a ser chamado. Pior: por causa da ênfase em centavos, ele pedia à pessoa o valor em centavos. Mudei o prompt para o assistente falar em reais e sempre chamar a ferramenta, deixando a validação com o código. Regra no prompt diminui o erro; regra no código impede.
 
-**Ligar o noxguard ao Spring AI.** O noxguard nasceu do Nox, o chat do meu portfólio que assim apelidei carinhosamente, e este foi o primeiro projeto em que liguei o `ToolPolicy` ao tool calling do Spring AI. (Uma excelente oportunidade que se encaixou pra mim). O encaixe foi um decorator de `ToolCallback`, que fica exatamente onde cada ferramenta executa. Para a política conferir cada argumento, tirei o `@Tool` dos casos de uso e passei para um adaptador na infraestrutura, com parâmetros simples. De quebra, a camada de aplicação deixou de depender de um framework de IA.
+**Ligar o noxguard ao Spring AI.** O noxguard nasceu do Nox, o chat do meu portfólio que assim apelidei carinhosamente, e este foi o primeiro projeto em que liguei o `ToolPolicy` ao tool calling do Spring AI. (Uma excelente oportunidade que se encaixou pra mim). O encaixe foi um decorator de `ToolCallback`, que fica exatamente onde cada ferramenta executa. Para a política conferir cada argumento, tirei o `@Tool` dos casos de uso e passei para um adaptador na infraestrutura, com parâmetros simples. De quebra, a camada de aplicação deixou de depender de um framework de IA. Depois da entrega, esse decorator virou o módulo `noxguard-spring-ai` (noxguard 0.4), e este projeto passou a usá-lo.
 
 **Um bug escondido em código que "funcionava".** O projeto base guardava o valor em centavos e devolvia esse número como se fosse reais: R$ 50,00 voltava como 5000. Olhando o JSON, ninguém percebe; mas o modelo lê esse número e pode responder "R$ 5.000". Numa aplicação com LLM, um dado errado na saída de uma ferramenta vira uma resposta errada para a pessoa.
 
