@@ -168,7 +168,9 @@ WARN  GuardedToolCallback : Tool call denied: tool=persist-transaction reason=LI
 
 O texto exato das respostas varia de uma execução para outra, porque vem do modelo. O que não varia é o que os guardrails deixam gravar.
 
-<!-- Prints do roteiro (resposta do assistente ao lado do log do bootRun) entram aqui. -->
+![Resposta do assistente no cenário da lista](docs/prints/limite-resposta.png)
+
+![Log do guardrail: três chamadas permitidas e a quarta negada](docs/prints/limite-log.png)
 
 ## Endpoints
 
@@ -200,7 +202,19 @@ src/main/java/dio/budgeting/
 
 ## O que aprendi
 
-<!-- Marcus: escreva aqui, com as suas palavras, o que você aprendeu no desafio. -->
+**O modelo não executa nada: ele pede.** No tool calling, o modelo devolve apenas o nome de uma ferramenta e os argumentos no formato JSON, e quem executa é a aplicação. Então, se é a aplicação que executa, é ela quem também decide se executa. Foi daí que veio a ideia de aplicar o guardrail.
+
+**A saída do modelo é entrada não confiável.** O argumento que chega na ferramenta passou por uma transcrição e por uma interpretação do modelo. Nos testes com o modelo de verdade, "gastei menos 20 reais no mercado" virou um gasto de R$ 20,00. O guardrail não pega esse caso, porque R$ 20,00 é um valor válido. Aqui ficou clara para mim a diferença entre validar formato e validar intenção: o formato se confere no código, e intenção só se garante pedindo a confirmação da pessoa, que é o próximo passo do projeto.
+
+**Validar no código, não no prompt.** Na primeira versão do prompt, o próprio modelo "validava" os dados e pedia mais informações, e o guardrail nem chegava a ser chamado. Pior: por causa da ênfase em centavos, ele pedia à pessoa o valor em centavos. Mudei o prompt para o assistente falar em reais e sempre chamar a ferramenta, deixando a validação com o código. Regra no prompt diminui o erro; regra no código impede.
+
+**Ligar o noxguard ao Spring AI.** O noxguard nasceu do Nox, o chat do meu portfólio que assim apelidei carinhosamente, e este foi o primeiro projeto em que liguei o `ToolPolicy` ao tool calling do Spring AI. (Uma excelente oportunidade que se encaixou pra mim). O encaixe foi um decorator de `ToolCallback`, que fica exatamente onde cada ferramenta executa. Para a política conferir cada argumento, tirei o `@Tool` dos casos de uso e passei para um adaptador na infraestrutura, com parâmetros simples. De quebra, a camada de aplicação deixou de depender de um framework de IA.
+
+**Um bug escondido em código que "funcionava".** O projeto base guardava o valor em centavos e devolvia esse número como se fosse reais: R$ 50,00 voltava como 5000. Olhando o JSON, ninguém percebe; mas o modelo lê esse número e pode responder "R$ 5.000". Numa aplicação com LLM, um dado errado na saída de uma ferramenta vira uma resposta errada para a pessoa.
+
+**Spec antes do código.** Escrever a especificação primeiro, trabalhar com o SDD, já com os casos de teste, fez a implementação virar uma conferência: cada teste é uma linha da tabela da spec.
+
+**A resposta do modelo não é a fonte da verdade.** Com uma versão anterior do prompt, o assistente disse que ia registrar 5 gastos e não registrou nenhum. Só descobri olhando o banco e o log do guardrail. Desde então, confiro o que aconteceu pelo dado gravado, não pelo que o modelo diz.
 
 ## Créditos
 
