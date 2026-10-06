@@ -113,12 +113,18 @@ Repetir o roteiro dos guardrails do README (M1 a M5 da spec 001, mais os cinco g
 | Log num `ToolDecisionListener` do projeto | Log dentro da biblioteca | A biblioteca não depende de biblioteca de log; cada app loga do seu jeito |
 | CI só para o `05-spring-ai` | CI para a trilha inteira | Os módulos 00 a 04 são do projeto base e não foram mexidos |
 
-## 11. Plano de commits
+## 11. Mudanças durante a implementação
+
+- **Dois testes de integração mudaram junto com o Spring AI.** Entre a 2.0.0-M4 e a 2.0.1, o módulo de OpenAI do Spring AI passou a usar o SDK oficial da OpenAI: o `OpenAiApi` e o `ResponseFormat` do pacote `openai.api` saíram, e o modelo de transcrição deixou de ter `call(Resource)`. O `OpenAiChatModelIT` passou a usar o `OpenAiChatModel` do contexto com as opções no `Prompt`, e o `OpenAiTranscriptionModelIT` passou a usar `transcribe(Resource)`. O código principal e as chaves do `application.properties` não mudaram: conferi cada uma no código da 2.0.1.
+- **Ordem dos commits.** O build e os testes de integração vão no mesmo commit, e a troca do decorator vai junto com o teste que o substitui, para cada commit compilar.
+- **Os commits saem como patches.** Esta sessão só tinha leitura no repositório; o Marcus aplica com `git am`, cria a tag e dá o push.
+
+## 12. Plano de commits
 
 1. `docs(spec): especifica a troca do decorator pelo noxguard-spring-ai`
-2. `build(ia): atualiza o Spring AI para 2.0.1 e troca o noxguard-core pelo noxguard-spring-ai`
-3. `refactor(ia): usa o GuardedToolCallbacks do noxguard no lugar do decorator próprio`
-4. `test(ia): cobre a ligação com o noxguard e o log das decisões`
+2. `build(ia): atualiza o Spring AI para 2.0.1 e troca o noxguard-core pelo noxguard-spring-ai` (com os dois testes de integração)
+3. `refactor(ia): usa o GuardedToolCallbacks do noxguard no lugar do decorator próprio` (com o teste da ligação)
+4. `test(ia): cobre o log das decisões`
 5. `ci: roda os testes do 05-spring-ai a cada push`
 6. `docs(readme): cita o noxguard-spring-ai e a tag da entrega`
 
