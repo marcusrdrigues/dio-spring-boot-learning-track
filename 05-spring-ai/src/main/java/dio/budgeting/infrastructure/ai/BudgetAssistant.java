@@ -41,7 +41,7 @@ public class BudgetAssistant {
     public String answer(String message) {
         return chatClient.prompt()
                 .user(message)
-                .toolCallbacks(guardedTools.forNewAnswer().callbacks())
+                .tools(guardedTools.forNewAnswer().callbacks())
                 .call()
                 .content();
     }
