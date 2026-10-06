@@ -114,7 +114,7 @@ O nome `amountInCents` deixa a unidade explícita para o modelo, que é a origem
 ### 5.3 Correções
 
 - **P5, centavos:** `TransactionOutput.value` passa a ser `amount / 100` com duas casas (`BigDecimal.valueOf(amount, 2)`). 5000 vira 50.00.
-- **Prompt do sistema** (`system-message.st`): a pessoa fala em reais e o assistente converte para centavos (R$ 50,00 = 5000), sem nunca pedir centavos; nunca inventar um valor; chamar a ferramenta com os dados recebidos, sem validar por conta própria, porque quem valida é o código (as duas camadas); vários gastos são registrados um por vez; se uma ferramenta devolver erro ou limite, explicar em reais, sem termos técnicos, e pedir à pessoa que repita; responder em português.
+- **Prompt do sistema** (`system-message.st`): a pessoa fala em reais e o assistente converte para centavos (R$ 50,00 = 5000), sem nunca pedir centavos; nunca inventar um valor; chamar a ferramenta com os dados recebidos, sem validar por conta própria, porque quem valida é o código (as duas camadas); vários gastos são registrados um por vez; só afirmar um registro que a ferramenta confirmou, contando pelas respostas dela; se uma ferramenta devolver erro ou limite, explicar em reais, sem termos técnicos, e pedir à pessoa que repita; responder em português.
 - **P9:** `BudgetingApplicationTests` passa a rodar só com `OPENAI_API_KEY` definida, como os outros `*IT`. Assim `gradlew test` roda sem chave e sem Docker.
 
 ## 6. Mudanças por arquivo
