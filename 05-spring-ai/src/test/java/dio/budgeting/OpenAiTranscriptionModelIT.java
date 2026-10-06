@@ -28,7 +28,7 @@ public class OpenAiTranscriptionModelIT {
     public void should_containExpectedKeywords_when_audioFilesAreProcessed(String fileName, String expectedKeyword) {
         var recording = new ClassPathResource("audio/" + fileName);
 
-        var response = openAiTranscriptionModel.call(recording);
+        var response = openAiTranscriptionModel.transcribe(recording);
 
         assertThat(response).contains(expectedKeyword);
         System.out.println(response);
