@@ -173,7 +173,7 @@ O texto exato das respostas varia de uma execução para outra, porque vem do mo
 
 ![Resposta do assistente no cenário da lista](docs/prints/limite-resposta.png)
 
-![Log do guardrail: três chamadas permitidas e a quarta negada](docs/prints/limite-log.png)
+![Log do guardrail: três chamadas permitidas, a quarta e a quinta negadas](docs/prints/limite-log.png)
 
 ## Endpoints
 
